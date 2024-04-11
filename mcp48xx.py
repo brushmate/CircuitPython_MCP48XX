@@ -66,6 +66,30 @@ class _DAC:
             spi.write(output)
 
 
+class _OutputVoltageLatch:
+    """An internal helper class for writing data to the DAC.
+
+    .. note::
+        All instances are created automatically and should not be used by the user.
+    """
+
+    def __init__(self, latch_input: Optional[DigitalInOut] = None) -> None:
+        self._latch_input = latch_input
+        if self._latch_input:
+            self._latch_input.switch_to_output(True)
+
+    def update(self) -> None:
+        """Updates the output voltage(s) of the DAC. On dual channel devices output voltages for
+        both channels are updated at the same time.
+
+        .. note::
+            This operation has no effect if :attr:`latch_input` is not configured.
+        """
+        if self._latch_input:
+            self._latch_input.value = False
+            self._latch_input.value = True
+
+
 class Channel:
     """An instance of a single channel for a multi-channel DAC.
 
@@ -181,7 +205,29 @@ class Channel:
         return buf
 
 
-class MCP4801(Channel):
+class _DualChannelDevice:
+    def __init__(
+        self,
+        spi_bus: SPI,
+        chip_select: DigitalInOut,
+        resolution: Literal[8, 10, 12],
+    ) -> None:
+        dac = _DAC(spi_bus, chip_select)
+        self._channel_a = Channel(0, resolution, dac)
+        self._channel_b = Channel(1, resolution, dac)
+
+    @property
+    def channel_a(self) -> Channel:
+        """Channel A of the DAC. This is a read-only property."""
+        return self._channel_a
+
+    @property
+    def channel_b(self) -> Channel:
+        """Channel B of the DAC. This is a read-only property."""
+        return self._channel_b
+
+
+class MCP4801(Channel, _OutputVoltageLatch):
     """Helper class for the Microchip MCP4801 SPI 8-bit DAC.
 
     :param ~busio.SPI spi_bus: The SPI bus the MCP4801 is connected to.
@@ -223,21 +269,10 @@ class MCP4801(Channel):
         latch_input: Optional[DigitalInOut] = None,
     ) -> None:
         Channel.__init__(self, 0, 8, _DAC(spi_bus, chip_select))
-        self._latch_input = latch_input
-        if self._latch_input:
-            self._latch_input.switch_to_output(True)
-
-    def update(self) -> None:
-        """Updates the output voltage of the DAC.
-
-        This operation has no effect if :attr:`latch_input` is not configured.
-        """
-        if self._latch_input:
-            self._latch_input.value = False
-            self._latch_input.value = True
+        _OutputVoltageLatch.__init__(self, latch_input)
 
 
-class MCP4811(Channel):
+class MCP4811(Channel, _OutputVoltageLatch):
     """Helper class for the Microchip MCP4811 SPI 10-bit DAC.
 
     :param ~busio.SPI spi_bus: The SPI bus the MCP4811 is connected to.
@@ -279,21 +314,10 @@ class MCP4811(Channel):
         latch_input: Optional[DigitalInOut] = None,
     ) -> None:
         Channel.__init__(self, 0, 10, _DAC(spi_bus, chip_select))
-        self._latch_input = latch_input
-        if self._latch_input:
-            self._latch_input.switch_to_output(True)
-
-    def update(self) -> None:
-        """Updates the output voltage of the DAC.
-
-        This operation has no effect if :attr:`latch_input` is not configured.
-        """
-        if self._latch_input:
-            self._latch_input.value = False
-            self._latch_input.value = True
+        _OutputVoltageLatch.__init__(self, latch_input)
 
 
-class MCP4821(Channel):
+class MCP4821(Channel, _OutputVoltageLatch):
     """Helper class for the Microchip MCP4821 SPI 12-bit DAC.
 
     :param ~busio.SPI spi_bus: The SPI bus the MCP4821 is connected to.
@@ -335,21 +359,10 @@ class MCP4821(Channel):
         latch_input: Optional[DigitalInOut] = None,
     ) -> None:
         Channel.__init__(self, 0, 12, _DAC(spi_bus, chip_select))
-        self._latch_input = latch_input
-        if self._latch_input:
-            self._latch_input.switch_to_output(True)
-
-    def update(self) -> None:
-        """Updates the output voltage of the DAC.
-
-        This operation has no effect if :attr:`latch_input` is not configured.
-        """
-        if self._latch_input:
-            self._latch_input.value = False
-            self._latch_input.value = True
+        _OutputVoltageLatch.__init__(self, latch_input)
 
 
-class MCP4802:
+class MCP4802(_DualChannelDevice, _OutputVoltageLatch):
     """Helper class for the Microchip MCP4802 SPI 8-bit Dual DAC.
 
     :param ~busio.SPI spi_bus: The SPI bus the MCP4802 is connected to.
@@ -391,34 +404,11 @@ class MCP4802:
         chip_select: DigitalInOut,
         latch_input: Optional[DigitalInOut] = None,
     ) -> None:
-        dac = _DAC(spi_bus, chip_select)
-        self._channel_a = Channel(0, 8, dac)
-        self._channel_b = Channel(1, 8, dac)
-        self._latch_input = latch_input
-        if self._latch_input:
-            self._latch_input.switch_to_output(True)
-
-    @property
-    def channel_a(self) -> Channel:
-        """Get channel A of the DAC."""
-        return self._channel_a
-
-    @property
-    def channel_b(self) -> Channel:
-        """Get channel B of the DAC."""
-        return self._channel_b
-
-    def update(self) -> None:
-        """Updates the output voltages of both channel A and channel B of the DAC at the same time.
-
-        This operation has no effect if :attr:`latch_input` is not configured.
-        """
-        if self._latch_input:
-            self._latch_input.value = False
-            self._latch_input.value = True
+        _DualChannelDevice.__init__(self, spi_bus, chip_select, 8)
+        _OutputVoltageLatch.__init__(self, latch_input)
 
 
-class MCP4812:
+class MCP4812(_DualChannelDevice, _OutputVoltageLatch):
     """Helper class for the Microchip MCP4812 SPI 10-bit Dual DAC.
 
     :param ~busio.SPI spi_bus: The SPI bus the MCP4812 is connected to.
@@ -458,34 +448,11 @@ class MCP4812:
         chip_select: DigitalInOut,
         latch_input: Optional[DigitalInOut] = None,
     ) -> None:
-        dac = _DAC(spi_bus, chip_select)
-        self._channel_a = Channel(0, 8, dac)
-        self._channel_b = Channel(1, 8, dac)
-        self._latch_input = latch_input
-        if self._latch_input:
-            self._latch_input.switch_to_output(True)
-
-    @property
-    def channel_a(self) -> Channel:
-        """Get channel A of the DAC."""
-        return self._channel_a
-
-    @property
-    def channel_b(self) -> Channel:
-        """Get channel B of the DAC."""
-        return self._channel_b
-
-    def update(self) -> None:
-        """Updates the output voltages of both channel A and channel B of the DAC at the same time.
-
-        This operation has no effect if :attr:`latch_input` is not configured.
-        """
-        if self._latch_input:
-            self._latch_input.value = False
-            self._latch_input.value = True
+        _DualChannelDevice.__init__(self, spi_bus, chip_select, 8)
+        _OutputVoltageLatch.__init__(self, latch_input)
 
 
-class MCP4822:
+class MCP4822(_DualChannelDevice, _OutputVoltageLatch):
     """Helper class for the Microchip MCP4822 SPI 12-bit Dual DAC.
 
     :param ~busio.SPI spi_bus: The SPI bus the MCP4822 is connected to.
@@ -527,28 +494,5 @@ class MCP4822:
         chip_select: DigitalInOut,
         latch_input: Optional[DigitalInOut] = None,
     ) -> None:
-        dac = _DAC(spi_bus, chip_select)
-        self._channel_a = Channel(0, 8, dac)
-        self._channel_b = Channel(1, 8, dac)
-        self._latch_input = latch_input
-        if self._latch_input:
-            self._latch_input.switch_to_output(True)
-
-    @property
-    def channel_a(self) -> Channel:
-        """Get channel A of the DAC."""
-        return self._channel_a
-
-    @property
-    def channel_b(self) -> Channel:
-        """Get channel B of the DAC."""
-        return self._channel_b
-
-    def update(self) -> None:
-        """Updates the output voltages of both channel A and channel B of the DAC at the same time.
-
-        This operation has no effect if :attr:`latch_input` is not configured.
-        """
-        if self._latch_input:
-            self._latch_input.value = False
-            self._latch_input.value = True
+        _DualChannelDevice.__init__(self, spi_bus, chip_select, 8)
+        _OutputVoltageLatch.__init__(self, latch_input)
